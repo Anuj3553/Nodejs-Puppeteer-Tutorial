@@ -1,50 +1,76 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
 
 (async () => {
-    const browser = await puppeteer.launch({
-        headless: false,
-        defaultViewport: false,
-        userDataDir: './tmp'
-    })
-    const page = await browser.newPage();
-    await page.goto('https://www.flipkart.com/search?q=iphone&otracker=search&otracker1=search&marketplace=FLIPKART&as-show=on&as=off');
+    try {
+        const browser = await puppeteer.launch({
+            headless: false,
+            defaultViewport: false,
+            args: ['--start-maximized']
+        });
+        const page = await browser.newPage();
 
-    const products = await page.$$('.tUxRFH');
+        await page.goto('https://www.flipkart.com/search?q=iphone&page=1', {
+            waitUntil: 'networkidle2'
+        });
 
-    let items = [];
+        let items = [];
+        let isLastPage = false;
 
-    for (const product of products) {
-        let title = null
-        let price = null
-        let image = null
+        while (!isLastPage) {
+            await page.waitForSelector('.tUxRFH', { visible: true });
 
-        try {
-            title = await page.evaluate(el => el.querySelector('.KzDlHZ').textContent, product);
-        } catch (error) {
-            console.error('Error fetching title:', error);
+            const products = await page.$$('.tUxRFH');
+
+            for (const product of products) {
+                let title = null;
+                let price = null;
+                let image = null;
+
+                try {
+                    title = await page.evaluate(el => el.querySelector('.KzDlHZ')?.textContent, product);
+                } catch { }
+
+                try {
+                    price = await page.evaluate(el => el.querySelector('.Nx9bqj._4b5DiR')?.textContent.trim(), product);
+                } catch { }
+
+                try {
+                    image = await page.evaluate(el => el.querySelector('.DByuf4')?.src, product);
+                } catch { }
+
+                if (title) {
+                    items.push({ title, price, image });
+
+                    fs.appendFileSync('results.csv', `${title.replace(/,/g, '.' )},${price},${image}\n`, 'utf8', function (err) {
+                        if (err) {
+                            console.error('Error writing to CSV file:', err);
+                        }
+                    });
+                }
+            }
+
+            // Check and click on the Next button
+            try {
+                const nextBtn = await page.$('a._9QVEpD');
+                if (nextBtn) {
+                    await Promise.all([
+                        page.waitForNavigation({ waitUntil: 'networkidle2' }),
+                        nextBtn.click()
+                    ]);
+                } else {
+                    isLastPage = true;
+                }
+            } catch (error) {
+                console.error('Error navigating to next page:', error);
+                isLastPage = true;
+            }
         }
 
-        try {
-            price = await page.evaluate(el => el.querySelector('.Nx9bqj._4b5DiR').textContent.trim(), product);
-        } catch (error) {
-            console.error('Error fetching price:', error);
-        }
-
-        try {
-            image = await page.evaluate(el => el.querySelector('.DByuf4').src, product);
-        } catch (error) {
-            console.error('Error fetching image:', error);
-        }
-
-        if (title !== "Null") {
-            items.push({ title, price, image });
-        }
-
+        console.log('items:', items);
+        console.log("\nLength: " + items.length + ' items found');
+        await browser.close();
+    } catch (error) {
+        console.error('Error in main script:', error);
     }
-
-    console.log('items:', items);
-
-    console.log("\nLength: " + items.length + ' items found');
-
-    await browser.close();
 })();
