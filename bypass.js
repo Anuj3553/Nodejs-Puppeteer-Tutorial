@@ -8,7 +8,7 @@ puppeteer.use(StealthPlugin());
 puppeteer.launch({
     headless: false,
     executablePath: "C:/Program Files/Chrome/Application/chrome.exe",
-    userDataDir: "C:/Users/anujv/AppData/Local/Google/Chrome/User Data",
+    userDataDir: "C:/Users/anujv/AppData/Local/Google/Chrome/User",
     // args: ['--proxy-server=http://162.23.125.34:8080']
 }).then(async browser => {
     console.log('Running tests...')
